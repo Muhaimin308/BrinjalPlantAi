@@ -10,9 +10,12 @@ from flask import Flask, render_template, request
 from PIL import Image, UnidentifiedImageError
 from werkzeug.utils import secure_filename
 
-app = Flask(__name__)
 
-# ---------------- CONFIGURATION ----------------
+# ==========================================
+# 1. APP CONFIGURATION
+# ==========================================
+
+app = Flask(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -35,14 +38,17 @@ app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# ---------------- LOAD MODEL ----------------
 
-if not os.path.exists(MODEL_PATH):
+# ==========================================
+# 2. LOAD TRAINED MODEL AND CLASS NAMES
+# ==========================================
+
+if not os.path.isfile(MODEL_PATH):
     raise FileNotFoundError(
-        f"Model file not found: {MODEL_PATH}"
+        f"Trained model not found: {MODEL_PATH}"
     )
 
-if not os.path.exists(CLASS_PATH):
+if not os.path.isfile(CLASS_PATH):
     raise FileNotFoundError(
         f"Class names file not found: {CLASS_PATH}"
     )
@@ -52,11 +58,18 @@ model = tf.keras.models.load_model(MODEL_PATH)
 with open(CLASS_PATH, "r", encoding="utf-8") as file:
     class_names = json.load(file)
 
-print("Model loaded successfully!")
-print("Disease classes:", class_names)
+if not isinstance(class_names, list) or not class_names:
+    raise ValueError(
+        "class_names.json must contain a non-empty JSON list."
+    )
+
+print("Brinjal Plant AI model loaded successfully.")
+print("Available classes:", class_names)
 
 
-# ---------------- HELPER FUNCTIONS ----------------
+# ==========================================
+# 3. HELPER FUNCTIONS
+# ==========================================
 
 def allowed_file(filename):
     return (
@@ -68,106 +81,105 @@ def allowed_file(filename):
 
 def predict_leaf(image):
     """
-    Preprocess an image and predict its class.
+    Predict the class of a brinjal leaf image.
 
-    This matches a model that includes its own Rescaling
-    layer to convert pixel values from 0-255 to [-1, 1].
+    This preprocessing expects the trained model to contain
+    its own Rescaling layer, as in the earlier training code.
     """
+
     image = image.convert("RGB")
     image = image.resize((224, 224))
 
-    image_array = np.asarray(
-        image, dtype=np.float32
-    )
+    image_array = np.asarray(image, dtype=np.float32)
+    image_array = np.expand_dims(image_array, axis=0)
 
-    image_array = np.expand_dims(
-        image_array, axis=0
-    )
-
-    probabilities = model.predict(
-        image_array, verbose=0
-    )[0]
+    probabilities = model.predict(image_array, verbose=0)[0]
 
     if len(probabilities) != len(class_names):
         raise ValueError(
-            "Model output does not match class_names.json."
+            "The number of model output classes does not match "
+            "the classes in class_names.json."
         )
 
     predicted_index = int(np.argmax(probabilities))
 
-    predicted_class = class_names[predicted_index]
+    prediction = class_names[predicted_index]
     confidence = float(probabilities[predicted_index]) * 100
 
-    return predicted_class, confidence
+    return prediction, confidence
 
 
-# ---------------- MAIN PAGE ----------------
+# ==========================================
+# 4. HOMEPAGE AND IMAGE PREDICTION
+# ==========================================
 
 @app.route("/", methods=["GET", "POST"])
 def index():
+
     prediction = None
     confidence = None
     image_url = None
     error = None
 
-    return render_template(
-        "index.html",
-        prediction=prediction,
-        confidence=confidence,
-        image_url=image_url,
-        error=error
-    )
-
     if request.method == "POST":
 
         uploaded_file = request.files.get("leaf_image")
 
-        if not uploaded_file or not uploaded_file.filename:
+        if uploaded_file is None or uploaded_file.filename == "":
             error = "Please select a brinjal leaf image."
 
         elif not allowed_file(uploaded_file.filename):
-            error = "Upload a JPG, JPEG, PNG, or WEBP image."
+            error = (
+                "Invalid file type. Please upload "
+                "JPG, JPEG, PNG, or WEBP."
+            )
 
         else:
             try:
-                # Validate the uploaded image
+                # Read and validate the image
                 image = Image.open(
                     uploaded_file.stream
                 ).convert("RGB")
 
+                # Predict disease class
                 prediction, confidence = predict_leaf(image)
 
-                # Create a unique filename
-                safe_name = secure_filename(
-                    uploaded_file.filename
-                )
-
-                extension = safe_name.rsplit(".", 1)[1].lower()
-
-                unique_filename = (
-                    f"{uuid.uuid4().hex}.{extension}"
-                )
+                # Save a unique image for display
+                filename = f"{uuid.uuid4().hex}.jpg"
 
                 save_path = os.path.join(
                     app.config["UPLOAD_FOLDER"],
-                    unique_filename
+                    filename
                 )
 
-                # Save a display copy as JPEG
                 image.save(save_path, format="JPEG")
 
-                image_url = (
-                    "/static/uploads/" + unique_filename
-                )
+                image_url = f"/static/uploads/{filename}"
 
             except (
                 UnidentifiedImageError,
                 OSError,
                 ValueError
             ):
+                prediction = None
+                confidence = None
+                image_url = None
+
                 error = (
-                    "Unable to process this image. "
-                    "Please choose a valid leaf photo."
+                    "Could not process this image. "
+                    "Please upload a valid leaf photograph."
+                )
+
+            except Exception:
+                app.logger.exception("Prediction failed.")
+
+                prediction = None
+                confidence = None
+                image_url = None
+
+                error = (
+                    "Prediction failed. Please try another image "
+                    "or check the application logs."
                 )
 
     return render_template(
@@ -179,22 +191,28 @@ def index():
     )
 
 
-# ---------------- ERROR HANDLING ----------------
+# ==========================================
+# 5. FILE SIZE ERROR
+# ==========================================
 
 @app.errorhandler(413)
 def file_too_large(error):
+
     return render_template(
         "index.html",
         prediction=None,
         confidence=None,
         image_url=None,
-        error="Image is too large. Maximum size is 8 MB."
+        error="The image is too large. Maximum upload size is 8 MB."
     ), 413
 
 
-# ---------------- RUN APPLICATION ----------------
+# ==========================================
+# 6. RUN APPLICATION
+# ==========================================
 
 if __name__ == "__main__":
+
     port = int(os.environ.get("PORT", 5000))
 
     app.run(
