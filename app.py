@@ -1,15 +1,20 @@
 
+
 import os
+
+# Use CPU instead of GPU on Render
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+os.environ["TF_NUM_INTRAOP_THREADS"] = "1"
+os.environ["TF_NUM_INTEROP_THREADS"] = "1"
+os.environ["OMP_NUM_THREADS"] = "1"
+
 import json
 import uuid
-
 import numpy as np
 import tensorflow as tf
-
-from flask import Flask, render_template, request
+from flask import Flask, request, render_template
 from PIL import Image, UnidentifiedImageError
 from werkzeug.utils import secure_filename
-
 
 # ==========================================
 # 1. APP CONFIGURATION
