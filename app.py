@@ -110,6 +110,14 @@ def index():
     image_url = None
     error = None
 
+    return render_template(
+        "index.html",
+        prediction=prediction,
+        confidence=confidence,
+        image_url=image_url,
+        error=error
+    )
+
     if request.method == "POST":
 
         uploaded_file = request.files.get("leaf_image")
