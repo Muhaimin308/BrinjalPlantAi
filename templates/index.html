@@ -1,0 +1,84 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Brinjal Plant Disease Detection</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f0f5f0;
+            margin: 0;
+            padding: 30px 15px;
+            text-align: center;
+        }
+        .container {
+            max-width: 600px;
+            margin: auto;
+            padding: 30px;
+            background: white;
+            border-radius: 14px;
+            box-shadow: 0 4px 16px #0001;
+        }
+        h1 { color: #245b35; }
+        input, button { margin: 12px; }
+        button {
+            background: #287b45;
+            color: white;
+            border: none;
+            padding: 12px 22px;
+            border-radius: 7px;
+            cursor: pointer;
+        }
+        img {
+            max-width: 100%;
+            max-height: 320px;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+        .result {
+            background: #edf8ee;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        .error { color: #b00020; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Brinjal Plant Disease Detection</h1>
+        <p>Upload a brinjal leaf image to get an AI prediction.</p>
+
+        <form method="POST" enctype="multipart/form-data">
+            <input
+                type="file"
+                name="leaf_image"
+                accept="image/png,image/jpeg,image/webp"
+                required
+            >
+            <br>
+            <button type="submit">Detect Disease</button>
+        </form>
+
+        {% if error %}
+            <p class="error">{{ error }}</p>
+        {% endif %}
+
+        {% if prediction %}
+            <div class="result">
+                <h2>Prediction: {{ prediction }}</h2>
+                <p>Model confidence: {{ "%.2f"|format(confidence) }}%</p>
+                {% if image_url %}
+                    <img src="{{ image_url }}" alt="Uploaded leaf">
+                {% endif %}
+                <p>
+                    This is an AI-generated prediction, not a confirmed
+                    plant disease diagnosis.
+                </p>
+            </div>
+        {% endif %}
+    </div>
+</body>
+</html>

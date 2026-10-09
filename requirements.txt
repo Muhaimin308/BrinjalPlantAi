@@ -1,0 +1,7 @@
+
+tensorflow
+numpy
+Pillow
+Flask
+split-folders
+gunicorn
